@@ -294,7 +294,7 @@
       const quem = isIn
         ? [r.fornecedor, r.doc].filter(Boolean).join(" / ")
         : [r.destino, r.resp].filter(Boolean).join(" / ");
-      return `<li>
+      return `<li class="${r.tipo}">
         <span class="obs-date">${esc(fmtDate(r.data))}</span>
         ${isIn ? '<span class="badge in">Entrada</span>' : '<span class="badge outflow">Saída</span>'}
         <strong>${isIn ? "+" : "−"}${fmtNum(r.qtd)} ${esc(m.unidade)}</strong>

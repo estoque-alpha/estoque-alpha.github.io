@@ -272,7 +272,7 @@ tr.clickable:hover { background: var(--primary-soft); }
 .empty { text-align: center; color: var(--muted); padding: 34px 0; }
 .muted { color: var(--muted); }
 .tag { font-size: .75rem; color: var(--muted); }
-.obs-cell { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obs-cell { display: inline-block; vertical-align: middle; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .obs-date { font-family: var(--mono); font-size: .72rem; color: var(--muted); }
 .obs-more {
   display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px;
@@ -332,11 +332,15 @@ tr.clickable:hover { background: var(--primary-soft); }
   box-shadow: var(--shadow-lg); overflow: hidden;
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.modal-head h2, .modal-head h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+#detHead { flex: 1; min-width: 0; }
+.modal-head h2, .modal-head h3 { margin: 0; font-size: 1.05rem; font-weight: 600; overflow-wrap: anywhere; }
+.modal-head p { margin: 4px 0 0; font-size: .86rem; }
+.modal-head { align-items: flex-start; }
+.modal-body h2 { margin: 0 0 12px; font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
 .modal-body { padding: 18px 20px 22px; overflow-y: auto; }
 .modal-close {
-  width: 32px; height: 32px; padding: 0; border-radius: 8px; flex: none;
-  background: transparent; border-color: transparent; color: var(--muted); font-size: 1.4rem; line-height: 1;
+  padding: 6px 14px; border-radius: 8px; flex: none; font-size: .85rem;
+  background: transparent; border-color: var(--border-strong); color: var(--text-2);
 }
 .modal-close:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
 
