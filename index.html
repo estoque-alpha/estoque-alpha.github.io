@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Controle de Estoque</title>
+<meta name="theme-color" content="#0b1017">
+<title>Alpha — Controle de estoque</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%233b82f6'/%3E%3Cpath d='M16 7.5 24 24h-4.2L16 15.6 12.2 24H8z' fill='%2306121f'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 </head>
@@ -12,7 +17,7 @@
 <!-- ============ NÃO CONFIGURADO ============ -->
 <div id="cfgView" class="center-page" hidden>
   <div class="card center-card wide">
-    <h1>📦 Controle de Estoque</h1>
+    <div class="brand brand-center"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lgc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lgc)"/><path d="M16 7.5 24 24h-4.2L16 15.6 12.2 24H8z" fill="#06121f"/><path d="M12.6 21h6.8" stroke="#06121f" stroke-width="2.2" stroke-linecap="round"/></svg><div><div class="brand-name">Alpha</div><div class="brand-sub">Controle de estoque</div></div></div>
     <p>O banco de dados ainda não foi configurado.</p>
     <p>Siga as instruções do arquivo <strong>supabase/setup.sql</strong>, crie o projeto no Supabase e cole a <strong>URL</strong> e a <strong>chave pública (anon / publishable)</strong> no início do script de <strong>index.html</strong> (variáveis <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code>).</p>
   </div>
@@ -20,13 +25,13 @@
 
 <!-- ============ CARREGANDO ============ -->
 <div id="loadingView" class="center-page">
-  <div class="muted" style="color:var(--muted)">Carregando...</div>
+  <div class="loading"><span class="spinner" aria-hidden="true"></span>Carregando...</div>
 </div>
 
 <!-- ============ LOGIN ============ -->
 <div id="loginView" class="center-page" hidden>
   <div class="card center-card">
-    <h1>📦 Controle de Estoque</h1>
+    <div class="brand brand-center"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lgl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lgl)"/><path d="M16 7.5 24 24h-4.2L16 15.6 12.2 24H8z" fill="#06121f"/><path d="M12.6 21h6.8" stroke="#06121f" stroke-width="2.2" stroke-linecap="round"/></svg><div><div class="brand-name">Alpha</div><div class="brand-sub">Controle de estoque</div></div></div>
     <p>Entre com seu usuário e senha.</p>
     <form id="loginForm">
       <label>Usuário
@@ -42,27 +47,34 @@
 </div>
 
 <div id="app" hidden>
-<header>
-  <h1>📦 Controle de Estoque de Matéria-Prima</h1>
-  <div class="tools">
-    <span class="live off" id="liveInd">○ Reconectando...</span>
-    <span class="who" id="whoAmI"></span>
-    <button id="btnExport" title="Baixar um arquivo com todos os dados">⬇ Exportar backup</button>
-    <button id="btnImport" title="Enviar um arquivo de backup para o banco compartilhado">⬆ Importar backup</button>
-    <input type="file" id="fileImport" accept=".json" hidden>
-    <button id="btnPass">Alterar senha</button>
-    <button id="btnLogout">Sair</button>
-  </div>
-</header>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lgs" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lgs)"/><path d="M16 7.5 24 24h-4.2L16 15.6 12.2 24H8z" fill="#06121f"/><path d="M12.6 21h6.8" stroke="#06121f" stroke-width="2.2" stroke-linecap="round"/></svg><div><div class="brand-name">Alpha</div><div class="brand-sub">Controle de estoque</div></div></div>
+    <nav aria-label="Seções">
+      <button data-tab="estoque" class="active"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="lbl"><span class="full">Estoque atual</span><span class="short">Estoque</span></span></button>
+      <button data-tab="materias"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 8-9-5-9 5v8l9 5 9-5z"/><path d="m3.3 7.5 8.7 5 8.7-5M12 22V12.5"/></svg><span class="lbl"><span class="full">Matérias-primas</span><span class="short">Matérias</span></span></button>
+      <button data-tab="entradas"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/></svg><span class="lbl"><span class="full">Entradas</span><span class="short">Entradas</span></span></button>
+      <button data-tab="saidas"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/></svg><span class="lbl"><span class="full">Saídas</span><span class="short">Saídas</span></span></button>
+      <button data-tab="usuarios" id="navUsuarios" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3.5"/><path d="M20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.65a3.5 3.5 0 0 1 0 6.7"/></svg><span class="lbl"><span class="full">Usuários</span><span class="short">Usuários</span></span></button>
+    </nav>
+    <div class="side-foot">Alpha &middot; matéria-prima</div>
+  </aside>
 
-<nav>
-  <button data-tab="materias" class="active">Matérias-primas</button>
-  <button data-tab="entradas">Entradas</button>
-  <button data-tab="saidas">Saídas</button>
-  <button data-tab="usuarios" id="navUsuarios" hidden>Usuários</button>
-</nav>
+  <div class="content">
+    <header class="topbar">
+      <div class="brand brand-mobile"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lgm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lgm)"/><path d="M16 7.5 24 24h-4.2L16 15.6 12.2 24H8z" fill="#06121f"/><path d="M12.6 21h6.8" stroke="#06121f" stroke-width="2.2" stroke-linecap="round"/></svg><span class="brand-name">Alpha</span></div>
+      <span class="live off" id="liveInd">Reconectando</span>
+      <div class="tools">
+        <span class="who" id="whoAmI"></span>
+        <button class="ghost small" id="btnExport" title="Baixar um arquivo com todos os dados"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 20h16"/></svg><span class="t">Exportar backup</span></button>
+        <button class="ghost small" id="btnImport" title="Enviar um arquivo de backup para o banco compartilhado"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 20h16"/></svg><span class="t">Importar backup</span></button>
+        <input type="file" id="fileImport" accept=".json" hidden>
+        <button class="ghost small" id="btnPass" title="Alterar senha"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M14 9l2 2"/></svg><span class="t">Alterar senha</span></button>
+        <button class="ghost small" id="btnLogout" title="Sair"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="t">Sair</span></button>
+      </div>
+    </header>
 
-<main>
+    <main>
   <div class="banner" id="localBanner" hidden>
     <strong>Dados antigos encontrados neste navegador.</strong>
     Deseja enviá-los para o banco compartilhado? Os registros serão <em>adicionados</em> aos que já existem.
@@ -336,7 +348,8 @@
     </div>
   </div>
 </main>
-
+  </div>
+</div>
 <div class="overlay" id="passModal" hidden>
   <div class="card">
     <h2>Alterar senha</h2>
