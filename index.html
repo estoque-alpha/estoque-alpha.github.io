@@ -72,8 +72,13 @@
     </div>
   </div>
 
-  <!-- ============ MATÉRIAS-PRIMAS ============ -->
-  <section id="materias" class="active">
+  <!-- ============ ESTOQUE ATUAL ============ -->
+  <section id="estoque" class="active">
+    <div class="page-head">
+      <h1 class="page-title">Estoque atual</h1>
+      <p class="page-sub">Saldo de cada matéria-prima, situação e últimas observações das entradas.</p>
+    </div>
+
     <div class="stats">
       <div class="stat"><div class="v" id="stTotal">0</div><div class="l">Matérias-primas cadastradas</div></div>
       <div class="stat"><div class="v" id="stLow">0</div><div class="l">Abaixo do estoque mínimo</div></div>
@@ -81,7 +86,38 @@
     </div>
 
     <div class="card">
-      <h2 id="mpFormTitle">Cadastrar matéria-prima</h2>
+      <div class="card-head"><h2>Posição de estoque</h2></div>
+      <div class="toolbar">
+        <input id="estBusca" placeholder="Buscar por código ou nome...">
+        <select id="estFiltro">
+          <option value="">Todas</option>
+          <option value="ok">OK</option>
+          <option value="low">Abaixo do mínimo</option>
+          <option value="out">Sem estoque</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Código</th><th>Matéria-prima</th><th>Un.</th>
+            <th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo</th>
+            <th class="num">Mínimo</th><th>Situação</th><th>Observações</th>
+          </tr></thead>
+          <tbody id="estTabela"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MATÉRIAS-PRIMAS (cadastro) ============ -->
+  <section id="materias">
+    <div class="page-head">
+      <h1 class="page-title">Cadastro de matérias-primas</h1>
+      <p class="page-sub">Cadastre e edite as matérias-primas controladas pelo Alpha.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2 id="mpFormTitle">Cadastrar matéria-prima</h2></div>
       <form id="mpForm">
         <input type="hidden" id="mpId">
         <div class="grid">
@@ -107,7 +143,7 @@
             </select>
           </label>
           <label>Estoque mínimo
-            <input id="mpMinimo" type="number" min="0" step="any" value="0">
+            <input id="mpMinimo" type="number" min="0" step="any" placeholder="Opcional">
           </label>
         </div>
         <div class="actions">
@@ -118,16 +154,15 @@
     </div>
 
     <div class="card">
-      <h2>Estoque atual</h2>
+      <div class="card-head"><h2>Matérias-primas cadastradas</h2></div>
       <div class="toolbar">
-        <input id="mpBusca" placeholder="🔍 Buscar por código ou nome...">
+        <input id="mpBusca" placeholder="Buscar por código ou nome...">
       </div>
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Código</th><th>Nome</th><th>Un.</th>
-            <th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo</th>
-            <th class="num">Mínimo</th><th>Situação</th><th></th>
+            <th>Código</th><th>Nome</th><th>Unidade</th>
+            <th class="num">Estoque mínimo</th><th class="num">Saldo</th><th></th>
           </tr></thead>
           <tbody id="mpTabela"></tbody>
         </table>
@@ -137,8 +172,13 @@
 
   <!-- ============ ENTRADAS ============ -->
   <section id="entradas">
+    <div class="page-head">
+      <h1 class="page-title">Entradas</h1>
+      <p class="page-sub">Registre o recebimento de matéria-prima.</p>
+    </div>
+
     <div class="card">
-      <h2 id="enFormTitle">Registrar entrada</h2>
+      <div class="card-head"><h2 id="enFormTitle">Registrar entrada</h2></div>
       <form id="enForm">
         <input type="hidden" id="enId">
         <div class="grid">
@@ -170,9 +210,9 @@
     </div>
 
     <div class="card">
-      <h2>Histórico de entradas</h2>
+      <div class="card-head"><h2>Histórico de entradas</h2></div>
       <div class="toolbar">
-        <input id="enBusca" placeholder="🔍 Buscar...">
+        <input id="enBusca" placeholder="Buscar...">
         <select id="enFiltroMp"></select>
       </div>
       <div class="table-wrap">
@@ -189,8 +229,13 @@
 
   <!-- ============ SAÍDAS ============ -->
   <section id="saidas">
+    <div class="page-head">
+      <h1 class="page-title">Saídas</h1>
+      <p class="page-sub">Registre o consumo ou a retirada de matéria-prima.</p>
+    </div>
+
     <div class="card">
-      <h2 id="saFormTitle">Registrar saída</h2>
+      <div class="card-head"><h2 id="saFormTitle">Registrar saída</h2></div>
       <form id="saForm">
         <input type="hidden" id="saId">
         <div class="grid">
@@ -222,9 +267,9 @@
     </div>
 
     <div class="card">
-      <h2>Histórico de saídas</h2>
+      <div class="card-head"><h2>Histórico de saídas</h2></div>
       <div class="toolbar">
-        <input id="saBusca" placeholder="🔍 Buscar...">
+        <input id="saBusca" placeholder="Buscar...">
         <select id="saFiltroMp"></select>
       </div>
       <div class="table-wrap">
@@ -241,8 +286,13 @@
 
   <!-- ============ USUÁRIOS (somente administradores) ============ -->
   <section id="usuarios">
+    <div class="page-head">
+      <h1 class="page-title">Usuários</h1>
+      <p class="page-sub">Gerencie quem pode acessar o Alpha.</p>
+    </div>
+
     <div class="card">
-      <h2>Novo usuário</h2>
+      <div class="card-head"><h2>Novo usuário</h2></div>
       <form id="usForm">
         <div class="grid">
           <label>Usuário *
@@ -262,7 +312,7 @@
     </div>
 
     <div class="card">
-      <h2>Usuários cadastrados</h2>
+      <div class="card-head"><h2>Usuários cadastrados</h2></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Usuário</th><th>Administrador</th><th>Criado em</th><th></th></tr></thead>
@@ -271,6 +321,20 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ DETALHES DA MATÉRIA-PRIMA ============ -->
+  <div id="detModal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="detTitulo">
+      <div class="modal-head">
+        <div id="detHead"></div>
+        <button type="button" class="modal-close" id="detClose">Fechar</button>
+      </div>
+      <div class="modal-body">
+        <h2 id="detTitulo">Movimentações</h2>
+        <ul class="timeline" id="detLista"></ul>
+      </div>
+    </div>
+  </div>
 </main>
 
 <div class="overlay" id="passModal" hidden>

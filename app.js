@@ -41,7 +41,9 @@
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const mpById = id => db.materias.find(m => m.id === id);
+  const fmtDM = s => s ? s.split("-").reverse().slice(0, 2).join("/") : "";
   const mpLabel = m => m ? (m.codigo ? `${m.codigo} – ${m.nome}` : m.nome) : "(removida)";
+  const fmtMin = n => (Number(n) > 0 ? fmtNum(n) : "—");
   const errMsg = e => (e && e.message) ? e.message : String(e);
 
   let toastTimer;
@@ -78,7 +80,7 @@
     if (t === "materias") {
       return { id: r.id, codigo: r.codigo ?? "", nome: r.nome, unidade: r.unidade, minimo: Number(r.minimo) || 0 };
     }
-    const o = { id: r.id, mpId: r.mp_id, data: r.data, qtd: Number(r.qtd) };
+    const o = { id: r.id, mpId: r.mp_id, data: r.data, qtd: Number(r.qtd), createdAt: r.created_at || "" };
     (t === "entradas" ? ["fornecedor", "doc", "obs"] : ["destino", "resp", "obs"]).forEach(k => o[k] = r[k] ?? "");
     return o;
   }
@@ -120,19 +122,19 @@
 
   // ---------- Abas ----------
   function showTab(tab) {
-    if (tab === "usuarios" && !(me && me.isAdmin)) tab = "materias";
-    if (!document.querySelector(`nav button[data-tab="${tab}"]`)) tab = "materias";
-    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    if (tab === "usuarios" && !(me && me.isAdmin)) tab = "estoque";
+    if (!document.querySelector(`[data-tab="${tab}"]`) || !document.getElementById(tab)) tab = "estoque";
+    document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
     document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === tab));
     try { localStorage.setItem(KEY + "-tab", tab); } catch (e) {}
   }
-  document.querySelectorAll("nav button").forEach(btn => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
+  document.querySelectorAll("[data-tab]").forEach(btn => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
 
   // ---------- Matérias-primas ----------
   function resetMpForm() {
     $("mpForm").reset();
     $("mpId").value = "";
-    $("mpMinimo").value = 0;
+    $("mpMinimo").value = "";
     $("mpFormTitle").textContent = "Cadastrar matéria-prima";
     $("mpSubmit").textContent = "Cadastrar";
     $("mpCancel").hidden = true;
@@ -174,7 +176,7 @@
     $("mpCodigo").value = m.codigo;
     $("mpNome").value = m.nome;
     $("mpUnidade").value = m.unidade;
-    $("mpMinimo").value = m.minimo;
+    $("mpMinimo").value = m.minimo > 0 ? m.minimo : "";
     $("mpFormTitle").textContent = "Editar matéria-prima";
     $("mpSubmit").textContent = "Salvar alterações";
     $("mpCancel").hidden = false;
@@ -203,33 +205,113 @@
     db.saidas = db.saidas.filter(x => x.mpId !== id);
   }
 
-  function renderMaterias() {
-    const q = norm($("mpBusca").value);
+  function situacao(m, saldo) {
+    if (saldo <= 0) return { key: "out", badge: '<span class="badge out">Sem estoque</span>' };
+    if (m.minimo > 0 && saldo < m.minimo) return { key: "low", badge: '<span class="badge low">Abaixo do mínimo</span>' };
+    return { key: "ok", badge: '<span class="badge ok">OK</span>' };
+  }
+
+  // Mais recentes primeiro (data desc; depois ordem de criação desc)
+  const byRecent = (a, b) => (b.data || "").localeCompare(a.data || "") || String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+
+  function obsCell(mpId) {
+    const list = db.entradas.filter(e => e.mpId === mpId && String(e.obs || "").trim()).sort(byRecent);
+    if (!list.length) return '<span class="muted">—</span>';
+    const e = list[0];
+    const more = list.length > 1 ? ` <span class="obs-more">+${list.length - 1}</span>` : "";
+    return `<span class="obs-cell" title="${esc(e.obs)}"><span class="obs-date">${esc(fmtDM(e.data))}</span> ${esc(e.obs)}</span>${more}`;
+  }
+
+  function renderEstoque() {
+    const q = norm($("estBusca").value);
+    const filtro = $("estFiltro").value;
     let low = 0, out = 0;
     const rows = [...db.materias]
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
       .map(m => {
         const t = totais(m.id);
-        let badge;
-        if (t.saldo <= 0) { badge = '<span class="badge out">Sem estoque</span>'; out++; }
-        else if (m.minimo > 0 && t.saldo < m.minimo) { badge = '<span class="badge low">Abaixo do mínimo</span>'; low++; }
-        else badge = '<span class="badge ok">OK</span>';
+        const sit = situacao(m, t.saldo);
+        if (sit.key === "out") out++; else if (sit.key === "low") low++;
         if (q && !norm(m.nome).includes(q) && !norm(m.codigo).includes(q)) return "";
-        return `<tr>
+        if (filtro && filtro !== sit.key) return "";
+        return `<tr class="clickable" data-act="det-mp" data-id="${esc(m.id)}" tabindex="0">
           <td>${esc(m.codigo)}</td><td><strong>${esc(m.nome)}</strong></td><td>${esc(m.unidade)}</td>
           <td class="num">${fmtNum(t.ent)}</td><td class="num">${fmtNum(t.sai)}</td>
-          <td class="num"><strong>${fmtNum(t.saldo)}</strong></td><td class="num">${fmtNum(m.minimo)}</td>
-          <td>${badge}</td>
-          <td class="acts">
-            <button class="small" data-act="edit-mp" data-id="${esc(m.id)}">Editar</button>
-            <button class="small danger" data-act="del-mp" data-id="${esc(m.id)}">Excluir</button>
-          </td></tr>`;
+          <td class="num"><strong>${fmtNum(t.saldo)}</strong></td><td class="num">${fmtMin(m.minimo)}</td>
+          <td>${sit.badge}</td>
+          <td>${obsCell(m.id)}</td></tr>`;
       }).join("");
-    $("mpTabela").innerHTML = rows || `<tr><td colspan="9" class="empty">${db.materias.length ? "Nenhum resultado para a busca." : "Nenhuma matéria-prima cadastrada ainda. Use o formulário acima."}</td></tr>`;
+    $("estTabela").innerHTML = rows || `<tr><td colspan="9" class="empty">${db.materias.length ? "Nenhum resultado para a busca." : "Nenhuma matéria-prima cadastrada ainda. Cadastre na aba Matérias-primas."}</td></tr>`;
     $("stTotal").textContent = db.materias.length;
     $("stLow").textContent = low;
     $("stOut").textContent = out;
   }
+  $("estBusca").addEventListener("input", renderEstoque);
+  $("estFiltro").addEventListener("change", renderEstoque);
+
+  function renderMaterias() {
+    const q = norm($("mpBusca").value);
+    const rows = [...db.materias]
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+      .filter(m => !q || norm(m.nome).includes(q) || norm(m.codigo).includes(q))
+      .map(m => `<tr>
+          <td>${esc(m.codigo)}</td><td><strong>${esc(m.nome)}</strong></td><td>${esc(m.unidade)}</td>
+          <td class="num">${fmtMin(m.minimo)}</td>
+          <td class="num"><strong>${fmtNum(totais(m.id).saldo)}</strong></td>
+          <td class="acts">
+            <button class="small" data-act="edit-mp" data-id="${esc(m.id)}">Editar</button>
+            <button class="small danger" data-act="del-mp" data-id="${esc(m.id)}">Excluir</button>
+          </td></tr>`).join("");
+    $("mpTabela").innerHTML = rows || `<tr><td colspan="6" class="empty">${db.materias.length ? "Nenhum resultado para a busca." : "Nenhuma matéria-prima cadastrada ainda. Use o formulário acima."}</td></tr>`;
+  }
+
+  // ---------- Detalhes da matéria-prima (modal) ----------
+  let detId = null;
+  function openDet(id) {
+    if (!mpById(id)) return;
+    detId = id;
+    renderDet();
+    $("detModal").hidden = false;
+    $("detClose").focus();
+  }
+  function closeDet() { detId = null; $("detModal").hidden = true; }
+
+  function renderDet() {
+    if (!detId) return;
+    const m = mpById(detId);
+    if (!m) return closeDet();
+    const t = totais(m.id);
+    const sit = situacao(m, t.saldo);
+    $("detHead").innerHTML = `<h2>${esc(m.nome)}</h2>
+      <p class="muted">${m.codigo ? `Código ${esc(m.codigo)} · ` : ""}Unidade ${esc(m.unidade)}</p>
+      <p>Saldo: <strong>${fmtNum(t.saldo)} ${esc(m.unidade)}</strong> · Mínimo: ${fmtMin(m.minimo)} · ${sit.badge}</p>`;
+    const movs = [
+      ...db.entradas.filter(e => e.mpId === m.id).map(e => ({ ...e, tipo: "in" })),
+      ...db.saidas.filter(e => e.mpId === m.id).map(e => ({ ...e, tipo: "out" })),
+    ].sort(byRecent);
+    $("detLista").innerHTML = movs.map(r => {
+      const isIn = r.tipo === "in";
+      const quem = isIn
+        ? [r.fornecedor, r.doc].filter(Boolean).join(" / ")
+        : [r.destino, r.resp].filter(Boolean).join(" / ");
+      return `<li>
+        <span class="obs-date">${esc(fmtDate(r.data))}</span>
+        ${isIn ? '<span class="badge in">Entrada</span>' : '<span class="badge outflow">Saída</span>'}
+        <strong>${isIn ? "+" : "−"}${fmtNum(r.qtd)} ${esc(m.unidade)}</strong>
+        ${quem ? `<span class="muted">${esc(quem)}</span>` : ""}
+        <div>${r.obs ? esc(r.obs) : '<span class="muted">—</span>'}</div>
+      </li>`;
+    }).join("") || '<li class="empty">Nenhuma movimentação registrada.</li>';
+  }
+
+  $("detClose").addEventListener("click", closeDet);
+  $("detModal").addEventListener("click", ev => { if (ev.target === $("detModal")) closeDet(); });
+  document.addEventListener("keydown", ev => {
+    if (ev.key === "Escape" && !$("detModal").hidden) closeDet();
+    else if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches && ev.target.matches("tr.clickable")) {
+      ev.preventDefault(); openDet(ev.target.dataset.id);
+    }
+  });
 
   // ---------- Movimentações (entradas e saídas) ----------
   function setupMov(prefix, listName, extraFields, tipo) {
@@ -452,11 +534,12 @@
 
   // ---------- Ações das tabelas (delegação de eventos) ----------
   document.addEventListener("click", ev => {
-    const b = ev.target.closest("button[data-act]"); if (!b) return;
+    const b = ev.target.closest("[data-act]"); if (!b) return;
+    if (b.tagName === "TR" && ev.target.closest("button, a, input, select")) return;
     const { act, id } = b.dataset;
     if (act.endsWith("-user")) return userAction(act, id);
     ({
-      "edit-mp": editMp, "del-mp": delMp,
+      "edit-mp": editMp, "del-mp": delMp, "det-mp": openDet,
       "edit-en": entradas.edit, "del-en": entradas.del,
       "edit-sa": saidas.edit, "del-sa": saidas.del,
     })[act]?.(id);
@@ -581,7 +664,7 @@
   // ---------- Tempo real ----------
   function setLive(on) {
     const el = $("liveInd");
-    el.textContent = on ? "● Ao vivo" : "○ Reconectando...";
+    el.textContent = on ? "Ao vivo" : "Reconectando";
     el.className = "live " + (on ? "on" : "off");
   }
 
@@ -640,13 +723,13 @@
     if (!me) return;
     const p = profiles.find(x => x.id === me.id);
     if (p) { me.username = p.username; me.isAdmin = !!p.is_admin; }
-    $("whoAmI").textContent = "👤 " + me.username + (me.isAdmin ? " (admin)" : "");
+    $("whoAmI").textContent = me.username + (me.isAdmin ? " (admin)" : "");
     $("navUsuarios").hidden = !me.isAdmin;
-    if (!me.isAdmin && $("usuarios").classList.contains("active")) showTab("materias");
+    if (!me.isAdmin && $("usuarios").classList.contains("active")) showTab("estoque");
   }
 
   function renderAll() {
-    renderMaterias();
+    renderEstoque(); renderMaterias(); renderDet();
     entradas.fillSelects(); saidas.fillSelects();
     entradas.render(); saidas.render();
     renderUsers();
@@ -669,7 +752,7 @@
     }
     resetMpForm(); entradas.reset(); saidas.reset();
     show("loadingView", false); show("app", true);
-    let tab = "materias";
+    let tab = "estoque";
     try { tab = localStorage.getItem(KEY + "-tab") || tab; } catch (e) {}
     showTab(tab);
     checkLocalBanner();
@@ -681,6 +764,7 @@
     db = { materias: [], entradas: [], saidas: [] };
     profiles = [];
     wasDown = false;
+    closeDet();
     show("app", false); show("passModal", false); show("localBanner", false);
   }
 
