@@ -161,16 +161,81 @@
   }
   #toast.show { transform: translateX(-50%) translateY(0); }
   #toast.error { background: var(--red); }
+  [hidden] { display: none !important; }
+  header .who { font-size: .9rem; opacity: .95; align-self: center; }
+  .live { font-size: .8rem; align-self: center; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.18); }
+  .live.on { color: #bbf7d0; }
+  .live.off { color: #fde68a; }
+  .center-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .center-card { width: 100%; max-width: 380px; margin: 0; }
+  .center-card.wide { max-width: 520px; }
+  .center-card h1 { margin: 0 0 6px; font-size: 1.25rem; }
+  .center-card p { color: var(--muted); margin: 0 0 16px; }
+  .center-card form { display: flex; flex-direction: column; gap: 14px; }
+  .center-card button.primary { width: 100%; }
+  .form-error { color: var(--red); font-size: .88rem; min-height: 1.2em; }
+  label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 500; color: var(--text); }
+  label.check input { width: auto; }
+  .banner {
+    background: var(--amber-bg); color: var(--text); border: 1px solid var(--amber);
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;
+  }
+  .banner .actions { margin-top: 10px; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay .card { width: 100%; max-width: 380px; margin: 0; }
+  .overlay form { display: flex; flex-direction: column; gap: 14px; }
+  .tag { font-size: .75rem; color: var(--muted); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.js"></script>
 </head>
 <body>
 
+<!-- ============ NÃO CONFIGURADO ============ -->
+<div id="cfgView" class="center-page" hidden>
+  <div class="card center-card wide">
+    <h1>📦 Controle de Estoque</h1>
+    <p>O banco de dados ainda não foi configurado.</p>
+    <p>Siga as instruções do arquivo <strong>supabase/setup.sql</strong>, crie o projeto no Supabase e cole a <strong>URL</strong> e a <strong>chave pública (anon / publishable)</strong> no início do script de <strong>index.html</strong> (variáveis <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code>).</p>
+  </div>
+</div>
+
+<!-- ============ CARREGANDO ============ -->
+<div id="loadingView" class="center-page">
+  <div class="muted" style="color:var(--muted)">Carregando...</div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginView" class="center-page" hidden>
+  <div class="card center-card">
+    <h1>📦 Controle de Estoque</h1>
+    <p>Entre com seu usuário e senha.</p>
+    <form id="loginForm">
+      <label>Usuário
+        <input id="loginUser" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </label>
+      <label>Senha
+        <input id="loginPass" type="password" autocomplete="current-password" required>
+      </label>
+      <div class="form-error" id="loginErr" role="alert"></div>
+      <button type="submit" class="primary" id="loginBtn">Entrar</button>
+    </form>
+  </div>
+</div>
+
+<div id="app" hidden>
 <header>
   <h1>📦 Controle de Estoque de Matéria-Prima</h1>
   <div class="tools">
+    <span class="live off" id="liveInd">○ Reconectando...</span>
+    <span class="who" id="whoAmI"></span>
     <button id="btnExport" title="Baixar um arquivo com todos os dados">⬇ Exportar backup</button>
-    <button id="btnImport" title="Carregar um arquivo de backup">⬆ Importar backup</button>
+    <button id="btnImport" title="Enviar um arquivo de backup para o banco compartilhado">⬆ Importar backup</button>
     <input type="file" id="fileImport" accept=".json" hidden>
+    <button id="btnPass">Alterar senha</button>
+    <button id="btnLogout">Sair</button>
   </div>
 </header>
 
@@ -178,9 +243,19 @@
   <button data-tab="materias" class="active">Matérias-primas</button>
   <button data-tab="entradas">Entradas</button>
   <button data-tab="saidas">Saídas</button>
+  <button data-tab="usuarios" id="navUsuarios" hidden>Usuários</button>
 </nav>
 
 <main>
+  <div class="banner" id="localBanner" hidden>
+    <strong>Dados antigos encontrados neste navegador.</strong>
+    Deseja enviá-los para o banco compartilhado? Os registros serão <em>adicionados</em> aos que já existem.
+    <div class="actions">
+      <button class="primary" id="localSend">Enviar</button>
+      <button id="localSkip">Agora não</button>
+    </div>
+  </div>
+
   <!-- ============ MATÉRIAS-PRIMAS ============ -->
   <section id="materias" class="active">
     <div class="stats">
@@ -347,7 +422,56 @@
       </div>
     </div>
   </section>
+
+  <!-- ============ USUÁRIOS (somente administradores) ============ -->
+  <section id="usuarios">
+    <div class="card">
+      <h2>Novo usuário</h2>
+      <form id="usForm">
+        <div class="grid">
+          <label>Usuário *
+            <input id="usNome" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Ex.: maria" pattern="[A-Za-z0-9._\-]{3,30}" title="3 a 30 caracteres: letras, números, ponto, hífen ou sublinhado">
+          </label>
+          <label>Senha * (mín. 4 caracteres)
+            <input id="usSenha" type="text" required minlength="4" autocomplete="off">
+          </label>
+          <label class="check" style="align-self:end;padding-bottom:10px">
+            <input id="usAdmin" type="checkbox"> Administrador
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary" id="usSubmit">Criar usuário</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Usuários cadastrados</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Usuário</th><th>Administrador</th><th>Criado em</th><th></th></tr></thead>
+          <tbody id="usTabela"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </main>
+
+<div class="overlay" id="passModal" hidden>
+  <div class="card">
+    <h2>Alterar senha</h2>
+    <form id="passForm">
+      <label>Senha atual <input id="pwOld" type="password" autocomplete="current-password" required></label>
+      <label>Nova senha (mín. 4 caracteres) <input id="pwNew" type="password" autocomplete="new-password" minlength="4" required></label>
+      <label>Repita a nova senha <input id="pwNew2" type="password" autocomplete="new-password" minlength="4" required></label>
+      <div class="actions" style="margin-top:0">
+        <button type="submit" class="primary" id="pwSubmit">Salvar</button>
+        <button type="button" id="pwCancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
 
 <div id="toast"></div>
 
@@ -355,29 +479,37 @@
 (() => {
   "use strict";
 
-  // ---------- Armazenamento local ----------
-  const KEY = "estoque-mp-v1";
-  let db = { materias: [], entradas: [], saidas: [] };
+  // ---------- Configuração do Supabase ----------
+  const SUPABASE_URL = "COLE_AQUI_A_URL";
+  const SUPABASE_ANON_KEY = "COLE_AQUI_A_CHAVE";
 
-  function load() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        db = { materias: d.materias || [], entradas: d.entradas || [], saidas: d.saidas || [] };
-      }
-    } catch (e) {
-      toast("Não foi possível ler os dados salvos neste navegador.", true);
+  const KEY = "estoque-mp-v1";           // chave antiga (dados locais) e prefixo de preferências
+  const EMAIL_DOMAIN = "@estoque.app";   // e-mail interno, nunca mostrado ao usuário
+
+  const $ = id => document.getElementById(id);
+  const show = (id, on) => { $(id).hidden = !on; };
+
+  const configured = !/COLE_AQUI/.test(SUPABASE_URL) && !/COLE_AQUI/.test(SUPABASE_ANON_KEY);
+  if (!configured || !window.supabase || !window.supabase.createClient) {
+    show("loadingView", false);
+    show("cfgView", true);
+    if (configured) {
+      $("cfgView").querySelector("p").textContent = "Não foi possível carregar a biblioteca do Supabase. Verifique sua conexão com a internet e recarregue a página.";
     }
+    return;
   }
-  function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(db)); }
-    catch (e) { toast("Erro ao salvar os dados no navegador.", true); }
-  }
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ---------- Estado ----------
+  let db = { materias: [], entradas: [], saidas: [] };
+  let profiles = [];            // linhas de public.profiles
+  let me = null;                // { id, username, isAdmin }
+  let channel = null;
+  let wasDown = false;
+  let hiddenAt = 0;
+  let loadSeq = 0;
 
   // ---------- Utilidades ----------
-  const $ = id => document.getElementById(id);
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const today = () => {
     const d = new Date();
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -388,6 +520,7 @@
   const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const mpById = id => db.materias.find(m => m.id === id);
   const mpLabel = m => m ? (m.codigo ? `${m.codigo} – ${m.nome}` : m.nome) : "(removida)";
+  const errMsg = e => (e && e.message) ? e.message : String(e);
 
   let toastTimer;
   function toast(msg, error = false) {
@@ -395,7 +528,16 @@
     t.textContent = msg;
     t.className = "show" + (error ? " error" : "");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.className = "", 2800);
+    toastTimer = setTimeout(() => t.className = "", error ? 4500 : 2800);
+  }
+
+  // Executa fn desabilitando o botão (evita envio duplicado) e mostra erros em toast
+  async function locked(btn, fn) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    try { return await fn(); }
+    catch (e) { toast(errMsg(e), true); }
+    finally { btn.disabled = false; }
   }
 
   function totais(mpId) {
@@ -404,14 +546,65 @@
     return { ent, sai, saldo: ent - sai };
   }
 
+  // ---------- Mapeamento banco <-> memória ----------
+  const COLS = {
+    materias: ["codigo", "nome", "unidade", "minimo"],
+    entradas: ["mp_id", "data", "qtd", "fornecedor", "doc", "obs"],
+    saidas:   ["mp_id", "data", "qtd", "destino", "resp", "obs"],
+  };
+  function fromRow(t, r) {
+    if (t === "materias") {
+      return { id: r.id, codigo: r.codigo ?? "", nome: r.nome, unidade: r.unidade, minimo: Number(r.minimo) || 0 };
+    }
+    const o = { id: r.id, mpId: r.mp_id, data: r.data, qtd: Number(r.qtd) };
+    (t === "entradas" ? ["fornecedor", "doc", "obs"] : ["destino", "resp", "obs"]).forEach(k => o[k] = r[k] ?? "");
+    return o;
+  }
+  function toRow(t, rec) {
+    const o = {};
+    COLS[t].forEach(c => { o[c] = c === "mp_id" ? rec.mpId : rec[c]; });
+    return o;
+  }
+  function upsertLocal(t, rec) {
+    const i = db[t].findIndex(x => x.id === rec.id);
+    if (i >= 0) db[t][i] = rec; else db[t].push(rec);
+  }
+
+  async function fetchAll(table) {
+    const out = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb.from(table).select("*").order("id").range(from, from + 999);
+      if (error) throw error;
+      out.push(...data);
+      if (data.length < 1000) break;
+    }
+    return out;
+  }
+
+  async function refetchAll() {
+    const seq = ++loadSeq;
+    const [m, e, s, p] = await Promise.all(["materias", "entradas", "saidas", "profiles"].map(fetchAll));
+    if (seq !== loadSeq || !me) return;   // chegou resposta mais nova ou saiu da conta
+    db = {
+      materias: m.map(r => fromRow("materias", r)),
+      entradas: e.map(r => fromRow("entradas", r)),
+      saidas: s.map(r => fromRow("saidas", r)),
+    };
+    profiles = p;
+    syncMe();
+    reconcileForms();
+    renderAll();
+  }
+
   // ---------- Abas ----------
-  document.querySelectorAll("nav button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
-      document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === btn.dataset.tab));
-      try { localStorage.setItem(KEY + "-tab", btn.dataset.tab); } catch (e) {}
-    });
-  });
+  function showTab(tab) {
+    if (tab === "usuarios" && !(me && me.isAdmin)) tab = "materias";
+    if (!document.querySelector(`nav button[data-tab="${tab}"]`)) tab = "materias";
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === tab));
+    try { localStorage.setItem(KEY + "-tab", tab); } catch (e) {}
+  }
+  document.querySelectorAll("nav button").forEach(btn => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
 
   // ---------- Matérias-primas ----------
   function resetMpForm() {
@@ -438,14 +631,17 @@
     ));
     if (dup) return toast("Já existe uma matéria-prima com esse nome ou código.", true);
 
-    if (id) {
-      Object.assign(mpById(id), data);
-      toast("Matéria-prima atualizada.");
-    } else {
-      db.materias.push({ id: uid(), ...data });
-      toast("Matéria-prima cadastrada.");
-    }
-    save(); resetMpForm(); renderAll();
+    locked($("mpSubmit"), async () => {
+      const q = id
+        ? sb.from("materias").update(toRow("materias", data)).eq("id", id)
+        : sb.from("materias").insert(toRow("materias", data));
+      const { data: rows, error } = await q.select();
+      if (error) throw error;
+      if (!rows || !rows.length) throw new Error("Registro não encontrado (talvez tenha sido excluído por outro usuário).");
+      upsertLocal("materias", fromRow("materias", rows[0]));
+      toast(id ? "Matéria-prima atualizada." : "Matéria-prima cadastrada.");
+      resetMpForm(); renderAll();
+    });
   });
   $("mpCancel").addEventListener("click", resetMpForm);
   $("mpBusca").addEventListener("input", renderMaterias);
@@ -464,18 +660,25 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function delMp(id) {
+  async function delMp(id) {
     const m = mpById(id); if (!m) return;
     const movs = db.entradas.filter(e => e.mpId === id).length + db.saidas.filter(e => e.mpId === id).length;
     const msg = movs
       ? `Excluir "${m.nome}"? Isso também vai apagar ${movs} movimentação(ões) de entrada/saída dela.`
       : `Excluir "${m.nome}"?`;
     if (!confirm(msg)) return;
+    try {
+      const { error } = await sb.from("materias").delete().eq("id", id);
+      if (error) throw error;
+    } catch (e) { return toast(errMsg(e), true); }
+    removeMateriaLocal(id);
+    reconcileForms(); renderAll();
+    toast("Matéria-prima excluída.");
+  }
+  function removeMateriaLocal(id) {
     db.materias = db.materias.filter(x => x.id !== id);
     db.entradas = db.entradas.filter(x => x.mpId !== id);
     db.saidas = db.saidas.filter(x => x.mpId !== id);
-    save(); resetMpForm(); renderAll();
-    toast("Matéria-prima excluída.");
   }
 
   function renderMaterias() {
@@ -496,8 +699,8 @@
           <td class="num"><strong>${fmtNum(t.saldo)}</strong></td><td class="num">${fmtNum(m.minimo)}</td>
           <td>${badge}</td>
           <td class="acts">
-            <button class="small" data-act="edit-mp" data-id="${m.id}">Editar</button>
-            <button class="small danger" data-act="del-mp" data-id="${m.id}">Excluir</button>
+            <button class="small" data-act="edit-mp" data-id="${esc(m.id)}">Editar</button>
+            <button class="small danger" data-act="del-mp" data-id="${esc(m.id)}">Excluir</button>
           </td></tr>`;
       }).join("");
     $("mpTabela").innerHTML = rows || `<tr><td colspan="9" class="empty">${db.materias.length ? "Nenhum resultado para a busca." : "Nenhuma matéria-prima cadastrada ainda. Use o formulário acima."}</td></tr>`;
@@ -510,6 +713,7 @@
   function setupMov(prefix, listName, extraFields, tipo) {
     const f = name => $(prefix + name);
     const isSaida = listName === "saidas";
+    const Tipo = tipo[0].toUpperCase() + tipo.slice(1);
 
     function reset() {
       f("Form").reset();
@@ -548,14 +752,17 @@
       const rec = { mpId, qtd, data: f("Data").value };
       extraFields.forEach(k => rec[k.toLowerCase()] = f(k).value.trim());
 
-      if (id) {
-        Object.assign(db[listName].find(x => x.id === id), rec);
-        toast(`${tipo[0].toUpperCase() + tipo.slice(1)} atualizada.`);
-      } else {
-        db[listName].push({ id: uid(), ...rec });
-        toast(`${tipo[0].toUpperCase() + tipo.slice(1)} registrada.`);
-      }
-      save(); reset(); renderAll();
+      locked(f("Submit"), async () => {
+        const q = id
+          ? sb.from(listName).update(toRow(listName, rec)).eq("id", id)
+          : sb.from(listName).insert(toRow(listName, rec));
+        const { data: rows, error } = await q.select();
+        if (error) throw error;
+        if (!rows || !rows.length) throw new Error("Registro não encontrado (talvez tenha sido excluído por outro usuário).");
+        upsertLocal(listName, fromRow(listName, rows[0]));
+        toast(`${Tipo} ${id ? "atualizada" : "registrada"}.`);
+        reset(); renderAll();
+      });
     });
 
     f("Cancel").addEventListener("click", reset);
@@ -577,11 +784,15 @@
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
-    function del(id) {
+    async function del(id) {
       if (!confirm(`Excluir esta ${tipo}?`)) return;
+      try {
+        const { error } = await sb.from(listName).delete().eq("id", id);
+        if (error) throw error;
+      } catch (e) { return toast(errMsg(e), true); }
       db[listName] = db[listName].filter(x => x.id !== id);
-      save(); reset(); renderAll();
-      toast(`${tipo[0].toUpperCase() + tipo.slice(1)} excluída.`);
+      reconcileForms(); renderAll();
+      toast(`${Tipo} excluída.`);
     }
 
     function render() {
@@ -604,15 +815,15 @@
           <td class="num" style="color:${cor};font-weight:600">${sinal}${fmtNum(r.qtd)} ${esc(m ? m.unidade : "")}</td>
           ${extraFields.map(k => `<td>${esc(r[k.toLowerCase()])}</td>`).join("")}
           <td class="acts">
-            <button class="small" data-act="edit-${prefix}" data-id="${r.id}">Editar</button>
-            <button class="small danger" data-act="del-${prefix}" data-id="${r.id}">Excluir</button>
+            <button class="small" data-act="edit-${prefix}" data-id="${esc(r.id)}">Editar</button>
+            <button class="small danger" data-act="del-${prefix}" data-id="${esc(r.id)}">Excluir</button>
           </td></tr>`;
       }).join("") || `<tr><td colspan="${4 + extraFields.length}" class="empty">${db[listName].length ? "Nenhum resultado." : `Nenhuma ${tipo} registrada ainda.`}</td></tr>`;
     }
 
     function fillSelects() {
       const opts = [...db.materias].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-        .map(m => `<option value="${m.id}">${esc(mpLabel(m))} (${esc(m.unidade)})</option>`).join("");
+        .map(m => `<option value="${esc(m.id)}">${esc(mpLabel(m))} (${esc(m.unidade)})</option>`).join("");
       const cur = f("Mp").value, curF = f("FiltroMp").value;
       f("Mp").innerHTML = `<option value="">Selecione...</option>` + opts;
       f("FiltroMp").innerHTML = `<option value="">Todas as matérias-primas</option>` + opts;
@@ -621,16 +832,107 @@
       updateHint();
     }
 
-    return { reset, render, fillSelects, edit, del };
+    return { reset, render, fillSelects, edit, del, formId: () => f("Id").value, listName };
   }
 
   const entradas = setupMov("en", "entradas", ["Fornecedor", "Doc", "Obs"], "entrada");
   const saidas = setupMov("sa", "saidas", ["Destino", "Resp", "Obs"], "saída");
 
-  // Ações das tabelas (delegação de eventos)
+  // Cancela edições cujo registro não existe mais (ex.: excluído por outra pessoa)
+  function reconcileForms() {
+    const id = $("mpId").value;
+    if (id && !mpById(id)) { resetMpForm(); toast("A matéria-prima que você editava foi excluída por outro usuário.", true); }
+    [entradas, saidas].forEach(mv => {
+      const eid = mv.formId();
+      if (eid && !db[mv.listName].some(x => x.id === eid)) { mv.reset(); toast("O registro que você editava foi excluído por outro usuário.", true); }
+    });
+  }
+
+  // ---------- Usuários (admin) ----------
+  function renderUsers() {
+    if (!me || !me.isAdmin) return;
+    const rows = [...profiles].sort((a, b) => a.username.localeCompare(b.username, "pt-BR")).map(p => {
+      const self = p.id === me.id;
+      const d = p.created_at ? new Date(p.created_at).toLocaleDateString("pt-BR") : "";
+      return `<tr>
+        <td><strong>${esc(p.username)}</strong>${self ? ' <span class="tag">(você)</span>' : ""}</td>
+        <td>${p.is_admin ? "Sim" : "Não"}</td><td>${esc(d)}</td>
+        <td class="acts">
+          <button class="small" data-act="pw-user" data-id="${esc(p.id)}">Redefinir senha</button>
+          <button class="small" data-act="adm-user" data-id="${esc(p.id)}">${p.is_admin ? "Remover admin" : "Tornar admin"}</button>
+          ${self ? "" : `<button class="small danger" data-act="del-user" data-id="${esc(p.id)}">Excluir</button>`}
+        </td></tr>`;
+    }).join("");
+    $("usTabela").innerHTML = rows || `<tr><td colspan="4" class="empty">Nenhum usuário.</td></tr>`;
+  }
+
+  async function refetchProfiles() {
+    profiles = await fetchAll("profiles");
+    syncMe();
+    renderUsers();
+  }
+
+  async function rpc(name, args) {
+    const { data, error } = await sb.rpc(name, args);
+    if (error) throw error;
+    return data;
+  }
+
+  $("usForm").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const username = $("usNome").value.trim().toLowerCase();
+    const password = $("usSenha").value;
+    if (!/^[a-z0-9._-]{3,30}$/.test(username)) return toast("Usuário inválido: use 3 a 30 caracteres (letras, números, ponto, hífen ou sublinhado).", true);
+    if (password.length < 4) return toast("A senha deve ter pelo menos 4 caracteres.", true);
+    locked($("usSubmit"), async () => {
+      await rpc("admin_create_user", { p_username: username, p_password: password, p_is_admin: $("usAdmin").checked });
+      $("usForm").reset();
+      toast("Usuário criado.");
+      await refetchProfiles();
+    });
+  });
+
+  async function userAction(act, id) {
+    const p = profiles.find(x => x.id === id); if (!p) return;
+    try {
+      if (act === "pw-user") {
+        const senha = prompt(`Nova senha para "${p.username}" (mínimo 4 caracteres):`);
+        if (senha === null) return;
+        if (senha.length < 4) return toast("A senha deve ter pelo menos 4 caracteres.", true);
+        await rpc("admin_set_password", { p_user_id: id, p_password: senha });
+        toast("Senha redefinida.");
+      } else if (act === "adm-user") {
+        await rpc("admin_set_admin", { p_user_id: id, p_is_admin: !p.is_admin });
+        toast(p.is_admin ? "Permissão de administrador removida." : "Usuário agora é administrador.");
+        await refetchProfiles();
+      } else if (act === "del-user") {
+        if (!confirm(`Excluir o usuário "${p.username}"? Ele não poderá mais entrar no sistema.`)) return;
+        await rpc("admin_delete_user", { p_user_id: id });
+        toast("Usuário excluído.");
+        await refetchProfiles();
+      }
+    } catch (e) { toast(errMsg(e), true); }
+  }
+
+  // ---------- Alterar senha ----------
+  $("btnPass").addEventListener("click", () => { $("passForm").reset(); show("passModal", true); $("pwOld").focus(); });
+  $("pwCancel").addEventListener("click", () => show("passModal", false));
+  $("passForm").addEventListener("submit", ev => {
+    ev.preventDefault();
+    if ($("pwNew").value !== $("pwNew2").value) return toast("As senhas novas não conferem.", true);
+    if ($("pwNew").value.length < 4) return toast("A nova senha deve ter pelo menos 4 caracteres.", true);
+    locked($("pwSubmit"), async () => {
+      await rpc("change_my_password", { p_old: $("pwOld").value, p_new: $("pwNew").value });
+      show("passModal", false);
+      toast("Senha alterada.");
+    });
+  });
+
+  // ---------- Ações das tabelas (delegação de eventos) ----------
   document.addEventListener("click", ev => {
     const b = ev.target.closest("button[data-act]"); if (!b) return;
     const { act, id } = b.dataset;
+    if (act.endsWith("-user")) return userAction(act, id);
     ({
       "edit-mp": editMp, "del-mp": delMp,
       "edit-en": entradas.edit, "del-en": entradas.del,
@@ -648,41 +950,261 @@
     URL.revokeObjectURL(a.href);
     toast("Backup exportado.");
   });
+
+  const chunks = (arr, n) => { const r = []; for (let i = 0; i < arr.length; i += n) r.push(arr.slice(i, i + n)); return r; };
+
+  // Envia dados no formato antigo ({materias, entradas, saidas}) para o banco compartilhado (somente adiciona)
+  async function importarDados(d) {
+    const str = v => (v == null ? "" : String(v));
+    const idMap = new Map();          // id antigo -> uuid novo
+    const byName = new Map(db.materias.map(m => [norm(m.nome), m.id]));
+    const novas = [];                 // { oldId, row }
+    const nomesNovas = new Map();     // nome normalizado -> oldId da primeira ocorrência
+    let reaproveitadas = 0;
+
+    for (const m of d.materias) {
+      const nome = str(m.nome).trim();
+      if (!nome) continue;
+      const k = norm(nome);
+      if (byName.has(k)) { idMap.set(m.id, byName.get(k)); reaproveitadas++; continue; }
+      if (nomesNovas.has(k)) { idMap.set(m.id, nomesNovas.get(k)); continue; }
+      nomesNovas.set(k, m.id);
+      novas.push({ oldId: m.id, row: { codigo: str(m.codigo).trim(), nome, unidade: str(m.unidade) || "un", minimo: Number(m.minimo) || 0 } });
+    }
+    // resolve apelidos internos do backup (nomes repetidos apontam para a 1ª ocorrência)
+    for (const grupo of chunks(novas, 500)) {
+      const { data, error } = await sb.from("materias").insert(grupo.map(x => x.row)).select();
+      if (error) throw error;
+      data.forEach((r, i) => {
+        idMap.set(grupo[i].oldId, r.id);
+        upsertLocal("materias", fromRow("materias", r));
+      });
+    }
+    // ids de duplicatas internas que apontavam para oldId da 1ª ocorrência
+    for (const [oldId, alvo] of [...idMap]) if (idMap.has(alvo) && idMap.get(alvo) !== alvo) idMap.set(oldId, idMap.get(alvo));
+
+    const resumo = { materias: novas.length, reaproveitadas, entradas: 0, saidas: 0, ignorados: 0 };
+    for (const [t, lista, extras] of [["entradas", d.entradas, ["fornecedor", "doc", "obs"]], ["saidas", d.saidas, ["destino", "resp", "obs"]]]) {
+      const rows = [];
+      for (const r of lista) {
+        const mp = idMap.get(r.mpId);
+        const qtd = Number(r.qtd);
+        if (!mp || !(qtd > 0)) { resumo.ignorados++; continue; }
+        const row = { mp_id: mp, data: str(r.data).slice(0, 10) || today(), qtd };
+        extras.forEach(k => row[k] = str(r[k]));
+        rows.push(row);
+      }
+      for (const grupo of chunks(rows, 500)) {
+        const { data, error } = await sb.from(t).insert(grupo).select();
+        if (error) throw error;
+        data.forEach(r => upsertLocal(t, fromRow(t, r)));
+        resumo[t] += data.length;
+      }
+    }
+    renderAll();
+    return resumo;
+  }
+  const resumoTxt = r => `${r.materias} matéria(s)-prima(s) nova(s), ${r.entradas} entrada(s) e ${r.saidas} saída(s) enviadas` +
+    (r.reaproveitadas ? ` (${r.reaproveitadas} matéria(s) já existiam e foram reaproveitadas)` : "") +
+    (r.ignorados ? `; ${r.ignorados} registro(s) inválido(s) ignorado(s)` : "") + ".";
+
+  const validBackup = d => d && Array.isArray(d.materias) && Array.isArray(d.entradas) && Array.isArray(d.saidas);
+
   $("btnImport").addEventListener("click", () => $("fileImport").click());
   $("fileImport").addEventListener("change", ev => {
-    const file = ev.target.files[0]; if (!file) return;
+    const input = ev.target;
+    const file = input.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try {
-        const d = JSON.parse(reader.result);
-        if (!Array.isArray(d.materias) || !Array.isArray(d.entradas) || !Array.isArray(d.saidas)) throw new Error();
-        if (!confirm("Importar este backup? Os dados atuais deste navegador serão substituídos.")) return;
-        db = { materias: d.materias, entradas: d.entradas, saidas: d.saidas };
-        save(); resetMpForm(); entradas.reset(); saidas.reset(); renderAll();
-        toast("Backup importado com sucesso.");
-      } catch (e) {
-        toast("Arquivo de backup inválido.", true);
-      } finally {
-        ev.target.value = "";
-      }
+      input.value = "";
+      let d;
+      try { d = JSON.parse(reader.result); if (!validBackup(d)) throw new Error(); }
+      catch (e) { return toast("Arquivo de backup inválido.", true); }
+      if (!confirm("Enviar este backup para o banco compartilhado? Os registros serão ADICIONADOS aos que já existem (nada será apagado). Matérias-primas com o mesmo nome serão reaproveitadas, sem duplicar.")) return;
+      locked($("btnImport"), async () => {
+        const r = await importarDados(d);
+        toast("Backup importado: " + resumoTxt(r));
+      });
     };
     reader.readAsText(file);
   });
 
-  // ---------- Inicialização ----------
+  // Dados antigos do navegador (versão sem banco compartilhado)
+  const DISMISS_KEY = KEY + "-local-dispensado";
+  function dadosLocais() {
+    try {
+      if (localStorage.getItem(DISMISS_KEY)) return null;
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (!validBackup(d)) return null;
+      return (d.materias.length || d.entradas.length || d.saidas.length) ? d : null;
+    } catch (e) { return null; }
+  }
+  function dispensarLocal() {
+    try { localStorage.setItem(DISMISS_KEY, "1"); } catch (e) {}
+    show("localBanner", false);
+  }
+  function checkLocalBanner() { show("localBanner", !!dadosLocais()); }
+  $("localSkip").addEventListener("click", dispensarLocal);
+  $("localSend").addEventListener("click", () => {
+    const d = dadosLocais(); if (!d) return dispensarLocal();
+    locked($("localSend"), async () => {
+      const r = await importarDados(d);
+      dispensarLocal();
+      toast("Dados enviados: " + resumoTxt(r));
+    });
+  });
+
+  // ---------- Tempo real ----------
+  function setLive(on) {
+    const el = $("liveInd");
+    el.textContent = on ? "● Ao vivo" : "○ Reconectando...";
+    el.className = "live " + (on ? "on" : "off");
+  }
+
+  function onChange(table, p) {
+    if (!me) return;
+    if (table === "profiles") {
+      if (p.eventType === "DELETE") {
+        profiles = profiles.filter(x => x.id !== p.old.id);
+        if (p.old.id === me.id) return sb.auth.signOut();
+      } else {
+        const i = profiles.findIndex(x => x.id === p.new.id);
+        if (i >= 0) profiles[i] = p.new; else profiles.push(p.new);
+      }
+      syncMe(); renderUsers();
+      return;
+    }
+    if (p.eventType === "DELETE") {
+      if (table === "materias") removeMateriaLocal(p.old.id);
+      else db[table] = db[table].filter(x => x.id !== p.old.id);
+    } else {
+      upsertLocal(table, fromRow(table, p.new));
+    }
+    reconcileForms();
+    renderAll();
+  }
+
+  function subscribe() {
+    unsubscribe();
+    channel = sb.channel("estoque-realtime");
+    ["materias", "entradas", "saidas", "profiles"].forEach(t =>
+      channel.on("postgres_changes", { event: "*", schema: "public", table: t }, p => onChange(t, p)));
+    channel.subscribe(status => {
+      if (status === "SUBSCRIBED") {
+        setLive(true);
+        if (wasDown) { wasDown = false; refetchAll().catch(e => toast(errMsg(e), true)); }
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        wasDown = true;
+        setLive(false);
+      }
+    });
+  }
+  function unsubscribe() {
+    if (channel) { try { sb.removeChannel(channel); } catch (e) {} channel = null; }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (me && hiddenAt && Date.now() - hiddenAt > 60000) {
+      refetchAll().catch(e => toast(errMsg(e), true));
+    }
+    hiddenAt = 0;
+  });
+
+  // ---------- Sessão / login ----------
+  function syncMe() {
+    if (!me) return;
+    const p = profiles.find(x => x.id === me.id);
+    if (p) { me.username = p.username; me.isAdmin = !!p.is_admin; }
+    $("whoAmI").textContent = "👤 " + me.username + (me.isAdmin ? " (admin)" : "");
+    $("navUsuarios").hidden = !me.isAdmin;
+    if (!me.isAdmin && $("usuarios").classList.contains("active")) showTab("materias");
+  }
+
   function renderAll() {
     renderMaterias();
     entradas.fillSelects(); saidas.fillSelects();
     entradas.render(); saidas.render();
+    renderUsers();
   }
 
-  load();
-  renderAll();
-  entradas.reset(); saidas.reset();
-  try {
-    const tab = localStorage.getItem(KEY + "-tab");
-    if (tab) document.querySelector(`nav button[data-tab="${tab}"]`)?.click();
-  } catch (e) {}
+  async function startApp(user) {
+    if (me && me.id === user.id) return;       // já iniciado (evento repetido)
+    me = { id: user.id, username: String(user.email || "").split("@")[0], isAdmin: false };
+    show("loginView", false); show("loadingView", true);
+    try {
+      subscribe();
+      await refetchAll();
+      if (!profiles.some(p => p.id === me.id)) throw new Error("Usuário não encontrado.");
+    } catch (e) {
+      const m = errMsg(e);
+      await stopApp();
+      await sb.auth.signOut().catch(() => {});
+      showLogin(m);
+      return;
+    }
+    resetMpForm(); entradas.reset(); saidas.reset();
+    show("loadingView", false); show("app", true);
+    let tab = "materias";
+    try { tab = localStorage.getItem(KEY + "-tab") || tab; } catch (e) {}
+    showTab(tab);
+    checkLocalBanner();
+  }
+
+  async function stopApp() {
+    unsubscribe();
+    me = null; loadSeq++;
+    db = { materias: [], entradas: [], saidas: [] };
+    profiles = [];
+    wasDown = false;
+    show("app", false); show("passModal", false); show("localBanner", false);
+  }
+
+  function showLogin(msg) {
+    show("loadingView", false); show("app", false); show("loginView", true);
+    $("loginErr").textContent = msg || "";
+    $("loginPass").value = "";
+    $("loginUser").focus();
+  }
+
+  $("loginForm").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const username = $("loginUser").value.trim().toLowerCase();
+    locked($("loginBtn"), async () => {
+      $("loginErr").textContent = "";
+      const { data, error } = await sb.auth.signInWithPassword({ email: username + EMAIL_DOMAIN, password: $("loginPass").value });
+      if (error) {
+        $("loginErr").textContent = (error.status && error.status >= 500) || /fetch|network/i.test(error.message || "")
+          ? "Não foi possível conectar ao servidor. Tente novamente."
+          : "Usuário ou senha inválidos";
+        return;
+      }
+      await startApp(data.user);
+    });
+  });
+
+  $("btnLogout").addEventListener("click", async () => {
+    await sb.auth.signOut();
+    await stopApp();
+    $("loginUser").value = "";
+    showLogin();
+  });
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT" && me) {
+      setTimeout(async () => { await stopApp(); showLogin(); }, 0);
+    }
+  });
+
+  (async () => {
+    try {
+      const { data } = await sb.auth.getSession();
+      if (data && data.session) return await startApp(data.session.user);
+    } catch (e) {}
+    showLogin();
+  })();
 })();
 </script>
 </body>
