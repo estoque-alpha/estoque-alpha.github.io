@@ -43,6 +43,17 @@
   const mpById = id => db.materias.find(m => m.id === id);
   const fmtDM = s => s ? s.split("-").reverse().slice(0, 2).join("/") : "";
   const mpLabel = m => m ? (m.codigo ? `${m.codigo} – ${m.nome}` : m.nome) : "(removida)";
+  const fmtDT = s => s ? new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  // Nome do usuário a partir do id (profiles é carregado junto com os dados)
+  const uname = id => { if (!id) return ""; const p = profiles.find(x => x.id === id); return p ? p.username : "usuário removido"; };
+  // Célula "Registrado por": quem cadastrou e, se houver, quem editou por último
+  function autorCell(r) {
+    const c = r.createdBy ? esc(uname(r.createdBy)) : '<span class="muted">—</span>';
+    const u = r.updatedBy
+      ? `<div class="autor-edit">editado por ${esc(uname(r.updatedBy))}${r.updatedAt ? " em " + esc(fmtDT(r.updatedAt)) : ""}</div>`
+      : "";
+    return `<td class="autor">${c}${u}</td>`;
+  }
   const fmtMin = n => (Number(n) > 0 ? fmtNum(n) : "—");
   const errMsg = e => (e && e.message) ? e.message : String(e);
 
@@ -76,11 +87,12 @@
     entradas: ["mp_id", "data", "qtd", "fornecedor", "doc", "obs"],
     saidas:   ["mp_id", "data", "qtd", "destino", "resp", "obs"],
   };
+  const autoria = r => ({ createdBy: r.created_by || null, updatedBy: r.updated_by || null, updatedAt: r.updated_at || "" });
   function fromRow(t, r) {
     if (t === "materias") {
-      return { id: r.id, codigo: r.codigo ?? "", nome: r.nome, unidade: r.unidade, minimo: Number(r.minimo) || 0 };
+      return { id: r.id, codigo: r.codigo ?? "", nome: r.nome, unidade: r.unidade, minimo: Number(r.minimo) || 0, ...autoria(r) };
     }
-    const o = { id: r.id, mpId: r.mp_id, data: r.data, qtd: Number(r.qtd), createdAt: r.created_at || "" };
+    const o = { id: r.id, mpId: r.mp_id, data: r.data, qtd: Number(r.qtd), createdAt: r.created_at || "", ...autoria(r) };
     (t === "entradas" ? ["fornecedor", "doc", "obs"] : ["destino", "resp", "obs"]).forEach(k => o[k] = r[k] ?? "");
     return o;
   }
@@ -118,6 +130,7 @@
     syncMe();
     reconcileForms();
     renderAll();
+    loadHistorico();
   }
 
   // ---------- Abas ----------
@@ -258,11 +271,12 @@
           <td>${esc(m.codigo)}</td><td><strong>${esc(m.nome)}</strong></td><td>${esc(m.unidade)}</td>
           <td class="num">${fmtMin(m.minimo)}</td>
           <td class="num"><strong>${fmtNum(totais(m.id).saldo)}</strong></td>
+          ${autorCell(m)}
           <td class="acts">
             <button class="small" data-act="edit-mp" data-id="${esc(m.id)}">Editar</button>
             <button class="small danger" data-act="del-mp" data-id="${esc(m.id)}">Excluir</button>
           </td></tr>`).join("");
-    $("mpTabela").innerHTML = rows || `<tr><td colspan="6" class="empty">${db.materias.length ? "Nenhum resultado para a busca." : "Nenhuma matéria-prima cadastrada ainda. Use o formulário acima."}</td></tr>`;
+    $("mpTabela").innerHTML = rows || `<tr><td colspan="7" class="empty">${db.materias.length ? "Nenhum resultado para a busca." : "Nenhuma matéria-prima cadastrada ainda. Use o formulário acima."}</td></tr>`;
   }
 
   // ---------- Detalhes da matéria-prima (modal) ----------
@@ -299,6 +313,7 @@
         ${isIn ? '<span class="badge in">Entrada</span>' : '<span class="badge outflow">Saída</span>'}
         <strong>${isIn ? "+" : "−"}${fmtNum(r.qtd)} ${esc(m.unidade)}</strong>
         ${quem ? `<span class="muted">${esc(quem)}</span>` : ""}
+        ${r.createdBy ? `<span class="autor-tag">por ${esc(uname(r.createdBy))}${r.updatedBy ? ` · editado por ${esc(uname(r.updatedBy))}` : ""}</span>` : ""}
         <div>${r.obs ? esc(r.obs) : '<span class="muted">—</span>'}</div>
       </li>`;
     }).join("") || '<li class="empty">Nenhuma movimentação registrada.</li>';
@@ -418,11 +433,12 @@
           <td>${fmtDate(r.data)}</td><td>${esc(mpLabel(m))}</td>
           <td class="num" style="color:${cor};font-weight:600">${sinal}${fmtNum(r.qtd)} ${esc(m ? m.unidade : "")}</td>
           ${extraFields.map(k => `<td>${esc(r[k.toLowerCase()])}</td>`).join("")}
+          ${autorCell(r)}
           <td class="acts">
             <button class="small" data-act="edit-${prefix}" data-id="${esc(r.id)}">Editar</button>
             <button class="small danger" data-act="del-${prefix}" data-id="${esc(r.id)}">Excluir</button>
           </td></tr>`;
-      }).join("") || `<tr><td colspan="${4 + extraFields.length}" class="empty">${db[listName].length ? "Nenhum resultado." : `Nenhuma ${tipo} registrada ainda.`}</td></tr>`;
+      }).join("") || `<tr><td colspan="${5 + extraFields.length}" class="empty">${db[listName].length ? "Nenhum resultado." : `Nenhuma ${tipo} registrada ainda.`}</td></tr>`;
     }
 
     function fillSelects() {
@@ -661,6 +677,108 @@
     });
   });
 
+
+  // ---------- Histórico de alterações ----------
+  let historico = [];          // mais recentes primeiro
+  let hiFim = false, hiErro = false;
+  const HI_PAGE = 300;
+  const ACOES = { insert: ["Inclusão", "in"], update: ["Alteração", "low"], delete: ["Exclusão", "out"] };
+  const CAMPOS = {
+    codigo: "código", nome: "nome", unidade: "unidade", minimo: "estoque mínimo", mp_id: "matéria-prima",
+    data: "data", qtd: "quantidade", fornecedor: "fornecedor", doc: "doc.", obs: "observação",
+    destino: "destino", resp: "responsável",
+  };
+
+  async function fetchHistorico(antesDe) {
+    let q = sb.from("historico").select("*").order("id", { ascending: false }).limit(HI_PAGE);
+    if (antesDe) q = q.lt("id", antesDe);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  }
+  async function loadHistorico() {
+    const seq = loadSeq;
+    try {
+      const d = await fetchHistorico();
+      if (seq !== loadSeq || !me) return;
+      historico = d; hiFim = d.length < HI_PAGE; hiErro = false;
+    } catch (e) {
+      if (seq !== loadSeq || !me) return;
+      historico = []; hiFim = true; hiErro = true;   // script 002_autoria.sql ainda não rodado
+    }
+    renderHistorico();
+  }
+
+  const quemHist = h => h.usuario || uname(h.usuario_id) || "—";
+  function nomeMp(id, d) {
+    const m = mpById(id); if (m) return m.nome;
+    if (d && d.mp_nome) return d.mp_nome;
+    const h = historico.find(x => x.tabela === "materias" && x.registro_id === id && x.dados);
+    return h ? h.dados.nome : "matéria-prima excluída";
+  }
+  function fmtCampo(k, v) {
+    if (v === null || v === undefined || v === "") return "vazio";
+    if (k === "data") return fmtDate(v);
+    if (k === "qtd" || k === "minimo") return fmtNum(v);
+    if (k === "mp_id") return nomeMp(v);
+    return String(v);
+  }
+  function descHist(h) {
+    const d = h.dados || {};
+    let txt;
+    if (h.tabela === "materias") {
+      const verbo = { insert: "Cadastrou", update: "Editou", delete: "Excluiu" }[h.acao] || h.acao;
+      txt = `${verbo} a matéria-prima ${d.nome || ""}${d.codigo ? ` (${d.codigo})` : ""}`;
+    } else {
+      const tipo = h.tabela === "entradas" ? "entrada" : "saída";
+      const verbo = { insert: "Registrou", update: "Editou", delete: "Excluiu" }[h.acao] || h.acao;
+      const un = d.mp_unidade || (mpById(d.mp_id) || {}).unidade || "";
+      txt = `${verbo} ${tipo} de ${fmtNum(d.qtd)} ${un} de ${nomeMp(d.mp_id, d)} (${fmtDate(d.data)})`;
+    }
+    let mud = "";
+    if (h.acao === "update" && h.anterior) {
+      const lista = Object.keys(CAMPOS)
+        .filter(k => k in d && JSON.stringify(h.anterior[k] ?? null) !== JSON.stringify(d[k] ?? null))
+        .map(k => `${CAMPOS[k]}: ${fmtCampo(k, h.anterior[k])} → ${fmtCampo(k, d[k])}`);
+      if (lista.length) mud = lista.join("; ");
+    }
+    return { txt, mud };
+  }
+
+  function renderHistorico() {
+    const sel = $("hiUsuario"), cur = sel.value;
+    const nomes = [...new Set(historico.map(quemHist))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    sel.innerHTML = '<option value="">Todos os usuários</option>' + nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    if (nomes.includes(cur)) sel.value = cur;
+    const fu = sel.value, ft = $("hiTipo").value, q = norm($("hiBusca").value);
+    const rows = historico
+      .filter(h => (!fu || quemHist(h) === fu) && (!ft || h.tabela === ft))
+      .map(h => ({ h, ...descHist(h) }))
+      .filter(x => !q || norm([x.txt, x.mud, quemHist(x.h), fmtDT(x.h.quando)].join(" ")).includes(q))
+      .map(({ h, txt, mud }) => {
+        const [rot, cls] = ACOES[h.acao] || [h.acao, "ok"];
+        return `<tr>
+          <td class="nowrap">${esc(fmtDT(h.quando))}</td>
+          <td><strong>${esc(quemHist(h))}</strong></td>
+          <td><span class="badge ${cls}">${esc(rot)}</span></td>
+          <td>${esc(txt)}${mud ? `<div class="autor-edit">${esc(mud)}</div>` : ""}</td></tr>`;
+      }).join("");
+    $("hiTabela").innerHTML = rows || `<tr><td colspan="4" class="empty">${
+      hiErro ? "O histórico ainda não foi ativado no banco de dados."
+      : historico.length ? "Nenhum resultado." : "Nenhuma alteração registrada ainda."}</td></tr>`;
+    $("hiMais").hidden = hiFim;
+  }
+  $("hiUsuario").addEventListener("change", renderHistorico);
+  $("hiTipo").addEventListener("change", renderHistorico);
+  $("hiBusca").addEventListener("input", renderHistorico);
+  $("hiMais").addEventListener("click", () => locked($("hiMais"), async () => {
+    const last = historico[historico.length - 1];
+    const d = await fetchHistorico(last && last.id);
+    historico.push(...d.filter(x => !historico.some(h => h.id === x.id)));
+    hiFim = d.length < HI_PAGE;
+    renderHistorico();
+  }));
+
   // ---------- Tempo real ----------
   function setLive(on) {
     const el = $("liveInd");
@@ -670,6 +788,14 @@
 
   function onChange(table, p) {
     if (!me) return;
+    if (table === "historico") {
+      if (p.eventType === "INSERT" && !historico.some(h => h.id === p.new.id)) {
+        historico.unshift(p.new);
+        historico.sort((a, b) => b.id - a.id);
+        renderHistorico();
+      }
+      return;
+    }
     if (table === "profiles") {
       if (p.eventType === "DELETE") {
         profiles = profiles.filter(x => x.id !== p.old.id);
@@ -694,7 +820,7 @@
   function subscribe() {
     unsubscribe();
     channel = sb.channel("estoque-realtime");
-    ["materias", "entradas", "saidas", "profiles"].forEach(t =>
+    ["materias", "entradas", "saidas", "profiles", "historico"].forEach(t =>
       channel.on("postgres_changes", { event: "*", schema: "public", table: t }, p => onChange(t, p)));
     channel.subscribe(status => {
       if (status === "SUBSCRIBED") {
@@ -733,6 +859,7 @@
     entradas.fillSelects(); saidas.fillSelects();
     entradas.render(); saidas.render();
     renderUsers();
+    renderHistorico();
   }
 
   async function startApp(user) {
@@ -763,6 +890,7 @@
     me = null; loadSeq++;
     db = { materias: [], entradas: [], saidas: [] };
     profiles = [];
+    historico = []; hiFim = false; hiErro = false;
     wasDown = false;
     closeDet();
     show("app", false); show("passModal", false); show("localBanner", false);

@@ -55,6 +55,7 @@
       <button data-tab="materias"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 8-9-5-9 5v8l9 5 9-5z"/><path d="m3.3 7.5 8.7 5 8.7-5M12 22V12.5"/></svg><span class="lbl"><span class="full">Matérias-primas</span><span class="short">Matérias</span></span></button>
       <button data-tab="entradas"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/></svg><span class="lbl"><span class="full">Entradas</span><span class="short">Entradas</span></span></button>
       <button data-tab="saidas"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/></svg><span class="lbl"><span class="full">Saídas</span><span class="short">Saídas</span></span></button>
+      <button data-tab="historico"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7.5V12l3 2"/></svg><span class="lbl"><span class="full">Histórico</span><span class="short">Histórico</span></span></button>
       <button data-tab="usuarios" id="navUsuarios" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20"/><circle cx="10" cy="8" r="3.5"/><path d="M20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.65a3.5 3.5 0 0 1 0 6.7"/></svg><span class="lbl"><span class="full">Usuários</span><span class="short">Usuários</span></span></button>
     </nav>
     <div class="side-foot">Alpha &middot; matéria-prima</div>
@@ -174,7 +175,7 @@
         <table>
           <thead><tr>
             <th>Código</th><th>Nome</th><th>Unidade</th>
-            <th class="num">Estoque mínimo</th><th class="num">Saldo</th><th></th>
+            <th class="num">Estoque mínimo</th><th class="num">Saldo</th><th>Cadastrado por</th><th></th>
           </tr></thead>
           <tbody id="mpTabela"></tbody>
         </table>
@@ -231,7 +232,7 @@
         <table>
           <thead><tr>
             <th>Data</th><th>Matéria-prima</th><th class="num">Quantidade</th>
-            <th>Fornecedor</th><th>Doc.</th><th>Obs.</th><th></th>
+            <th>Fornecedor</th><th>Doc.</th><th>Obs.</th><th>Registrado por</th><th></th>
           </tr></thead>
           <tbody id="enTabela"></tbody>
         </table>
@@ -288,7 +289,7 @@
         <table>
           <thead><tr>
             <th>Data</th><th>Matéria-prima</th><th class="num">Quantidade</th>
-            <th>Destino</th><th>Responsável</th><th>Obs.</th><th></th>
+            <th>Destino</th><th>Responsável</th><th>Obs.</th><th>Registrado por</th><th></th>
           </tr></thead>
           <tbody id="saTabela"></tbody>
         </table>
@@ -297,6 +298,33 @@
   </section>
 
   <!-- ============ USUÁRIOS (somente administradores) ============ -->
+  <section id="historico">
+    <div class="page-head">
+      <h1 class="page-title">Histórico de alterações</h1>
+      <p class="page-sub">Quem incluiu, alterou ou excluiu cada registro, com data e hora.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Registro de atividades</h2></div>
+      <div class="toolbar">
+        <input id="hiBusca" placeholder="Buscar no histórico...">
+        <select id="hiUsuario"><option value="">Todos os usuários</option></select>
+        <select id="hiTipo">
+          <option value="">Todos os tipos</option>
+          <option value="materias">Matérias-primas</option>
+          <option value="entradas">Entradas</option>
+          <option value="saidas">Saídas</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data e hora</th><th>Usuário</th><th>Ação</th><th>Descrição</th></tr></thead>
+          <tbody id="hiTabela"></tbody>
+        </table>
+      </div>
+      <div class="actions"><button type="button" class="ghost small" id="hiMais" hidden>Carregar mais</button></div>
+    </div>
+  </section>
+
   <section id="usuarios">
     <div class="page-head">
       <h1 class="page-title">Usuários</h1>

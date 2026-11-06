@@ -434,3 +434,9 @@ tr.clickable:hover { background: var(--primary-soft); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Autoria e histórico ---------- */
+td.autor { white-space: nowrap; font-weight: 500; }
+.autor-edit { font-size: .74rem; color: var(--muted); font-weight: 400; margin-top: 2px; white-space: normal; }
+.autor-tag { font-size: .74rem; color: var(--muted); }
+td.nowrap { white-space: nowrap; font-family: var(--mono); font-size: .82rem; }
